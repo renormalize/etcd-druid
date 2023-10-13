@@ -20,7 +20,8 @@ IMAGE_REPOSITORY    := $(REGISTRY)/etcd-druid
 IMAGE_BUILD_TAG     := $(VERSION)
 BUILD_DIR           := build
 PROVIDERS           := ""
-BUCKET_NAME         := "e2e-test"
+# Changing bucket name to my bucket
+BUCKET_NAME         := "my-bucket"
 KUBECONFIG_PATH     :=$(REPO_ROOT)/hack/e2e-test/infrastructure/kind/kubeconfig
 
 IMG ?= ${IMAGE_REPOSITORY}:${IMAGE_BUILD_TAG}

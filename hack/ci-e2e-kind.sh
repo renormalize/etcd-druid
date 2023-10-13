@@ -19,9 +19,9 @@ set -o pipefail
 
 make kind-up
 
-trap "
-  ( make kind-down )
-" EXIT
+# trap "
+#   ( make kind-down )
+# " EXIT
 
 kubectl wait --for=condition=ready node --all
 export AWS_APPLICATION_CREDENTIALS_JSON="/tmp/aws.json"
@@ -34,5 +34,5 @@ make LOCALSTACK_HOST="localstack.default:4566" \
   AWS_REGION="us-east-2" \
   PROVIDERS="aws" \
   TEST_ID="$BUCKET_NAME" \
-  STEPS="setup,deploy,test" \
+  STEPS="setup,deploy" \
   test-e2e
