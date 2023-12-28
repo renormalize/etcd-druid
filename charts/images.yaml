@@ -4,7 +4,8 @@ images:
     name: 'etcdbrctl'
   sourceRepository: github.com/gardener/etcd-backup-restore
   repository: europe-docker.pkg.dev/gardener-project/public/gardener/etcdbrctl
-  tag: "v0.24.7"
+  # TODO: @renormalize: tag changed for dev
+  tag: "v0.28.0-dev"
 - name: etcd
   sourceRepository: github.com/gardener/etcd-custom-image
   repository: europe-docker.pkg.dev/gardener-project/public/gardener/etcd
@@ -14,7 +15,8 @@ images:
     name: 'etcdbrctl'
   sourceRepository: github.com/gardener/etcd-backup-restore
   repository: europe-docker.pkg.dev/gardener-project/public/gardener/etcdbrctl
-  tag: "v0.27.0"
+  # TODO: @renormalize: tag changed for dev
+  tag: "v0.28.0-dev"
 - name: etcd-wrapper
   sourceRepository: github.com/gardener/etcd-wrapper
   repository: europe-docker.pkg.dev/gardener-project/public/gardener/etcd-wrapper

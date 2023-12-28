@@ -169,6 +169,10 @@ kind-down: $(KIND)
 deploy-localstack: $(KUBECTL)
 	./hack/deploy-localstack.sh
 
+.PHONY: deploy-azurite
+deploy-azurite: $(KUBECTL)
+	./hack/deploy-azurite.sh
+
 .PHONY: ci-e2e-kind
 ci-e2e-kind:
 	BUCKET_NAME=$(BUCKET_NAME) ./hack/ci-e2e-kind.sh
