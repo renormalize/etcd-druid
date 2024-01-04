@@ -47,6 +47,8 @@ const (
 	EnvAWSApplicationCredentials = "AWS_APPLICATION_CREDENTIALS"
 	// EnvAzureApplicationCredentials is the environment variable key for Azure application credentials.
 	EnvAzureApplicationCredentials = "AZURE_APPLICATION_CREDENTIALS"
+	// EnvAzureEnableAzurite is the environment variable key to enable the ABS emulator Azurite.
+	EnvAzureEnableAzurite = "AZURE_ENABLE_STORAGE_EMULATOR"
 	// EnvAzureStorageAPIEndpoint is the environment variable key for Azure storage API endpoint override.
 	EnvAzureStorageAPIEndpoint = "AZURE_STORAGE_API_ENDPOINT"
 	// EnvGoogleApplicationCredentials is the environment variable key for Google application credentials.

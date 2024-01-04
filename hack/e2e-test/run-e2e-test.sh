@@ -228,6 +228,12 @@ for p in ${1//,/ }; do
       setup_aws_e2e
       ;;
     azure)
+      echo "$STORAGE_ACCOUNT"
+      echo "$STORAGE_KEY"
+      echo "$PROVIDERS"
+      echo "$AZURE_STORAGE_CONNECTION_STRING"
+      echo "$TEST_ID"
+      echo "$STEPS"
       setup_azure_e2e
       ;;
     gcp)
