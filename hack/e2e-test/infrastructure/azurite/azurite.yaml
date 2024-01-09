@@ -18,10 +18,11 @@ spec:
     spec:
       containers:
       - name: azurite
-        image: mcr.microsoft.com/azure-storage/azurite
+        image: mcr.microsoft.com/azure-storage/azurite:latest
         ports:
           - containerPort: 10000
             hostPort: 10000
+        command: ["azurite-blob", "--blobHost", "0.0.0.0", "--blobPort", "10000", "--disableProductStyleUrl"]
       restartPolicy: Always
 ---
 apiVersion: v1

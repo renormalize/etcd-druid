@@ -23,9 +23,12 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	"github.com/sirupsen/logrus"
@@ -34,8 +37,10 @@ import (
 )
 
 const (
-	absCredentialFile     = "AZURE_APPLICATION_CREDENTIALS"
-	absCredentialJSONFile = "AZURE_APPLICATION_CREDENTIALS_JSON"
+	absCredentialDirectory = "AZURE_APPLICATION_CREDENTIALS"
+	absCredentialJSONFile  = "AZURE_APPLICATION_CREDENTIALS_JSON"
+	envEnableAzurite       = "AZURE_ENABLE_STORAGE_EMULATOR" // Azurite (ABS Emulator)
+	azuriteEndpoint        = "AZURE_STORAGE_API_ENDPOINT"
 )
 
 // ABSSnapStore is an ABS backed snapstore.
@@ -71,6 +76,21 @@ func NewABSSnapStore(config *brtypes.SnapstoreConfig) (*ABSSnapStore, error) {
 			TryTimeout: downloadTimeout,
 		}})
 	u, err := url.Parse(fmt.Sprintf("https://%s.%s", storageAccount, brtypes.AzureBlobStorageHostName))
+	// Check if backup-restore is running with the Azure Blob Storage Emulator - Azurite
+	if enableAzurite, ok := os.LookupEnv(envEnableAzurite); ok {
+		isEmulator, err := strconv.ParseBool(enableAzurite)
+		if err != nil {
+			return nil, fmt.Errorf("value %s for the environment variable %s could not be parsed", enableAzurite, envEnableAzurite)
+		}
+		if isEmulator {
+			if endpoint, ok := os.LookupEnv(azuriteEndpoint); ok {
+				// application protocol is set by the user of Azurite, not by backup-restore
+				u, err = url.Parse(fmt.Sprintf("%s/%s", endpoint, credentials.AccountName()))
+			} else {
+				return nil, fmt.Errorf("environment variable %s not set while the environment variable %s is set to true", azuriteEndpoint, envEnableAzurite)
+			}
+		}
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse service url: %v", err)
 	}
@@ -90,7 +110,7 @@ func getCredentials(prefixString string) (string, string, error) {
 		return credentials.StorageAccount, credentials.SecretKey, nil
 	}
 
-	if dir, isSet := os.LookupEnv(prefixString + absCredentialFile); isSet {
+	if dir, isSet := os.LookupEnv(prefixString + absCredentialDirectory); isSet {
 		credentials, err := readABSCredentialFiles(dir)
 		if err != nil {
 			return "", "", fmt.Errorf("error getting credentials from %v dir", dir)
@@ -347,30 +367,31 @@ func (a *ABSSnapStore) Delete(snap brtypes.Snapshot) error {
 	return nil
 }
 
-// ABSSnapStoreHash calculates and returns the hash of azure object storage snapstore secret.
-func ABSSnapStoreHash(config *brtypes.SnapstoreConfig) (string, error) {
-	if dir, isSet := os.LookupEnv(absCredentialFile); isSet {
-		absConfig, err := readABSCredentialFiles(dir)
-		if err != nil {
-			return "", fmt.Errorf("error getting credentials from %v directory", dir)
+// GetABSCredentialsLastModifiedTime returns the latest modification timestamp of the ABS credential file(s)
+func GetABSCredentialsLastModifiedTime() (time.Time, error) {
+	if dir, isSet := os.LookupEnv(absCredentialDirectory); isSet {
+		// credential files which are essential for creating the snapstore
+		credentialFiles := []string{"storageKey", "storageAccount"}
+		for i := range credentialFiles {
+			credentialFiles[i] = filepath.Join(dir, credentialFiles[i])
 		}
-		return getABSHash(absConfig), nil
+		absTimeStamp, err := getLatestCredentialsModifiedTime(credentialFiles)
+		if err != nil {
+			return time.Time{}, fmt.Errorf("failed to get ABS credential timestamp from the directory %v with error: %v", dir, err)
+		}
+		return absTimeStamp, nil
 	}
 
 	if filename, isSet := os.LookupEnv(absCredentialJSONFile); isSet {
-		absConfig, err := readABSCredentialsJSON(filename)
+		credentialFiles := []string{filename}
+		absTimeStamp, err := getLatestCredentialsModifiedTime(credentialFiles)
 		if err != nil {
-			return "", fmt.Errorf("error getting credentials using %v file", filename)
+			return time.Time{}, fmt.Errorf("failed to fetch file information of the ABS JSON credential file %v with error: %v", filename, err)
 		}
-		return getABSHash(absConfig), nil
+		return absTimeStamp, nil
 	}
 
-	return "", nil
-}
-
-func getABSHash(config *absCredentials) string {
-	data := fmt.Sprintf("%s%s", config.SecretKey, config.StorageAccount)
-	return getHash(data)
+	return time.Time{}, fmt.Errorf("no environment variable set for the ABS credential file")
 }
 
 func isABSConfigEmpty(config *absCredentials) error {

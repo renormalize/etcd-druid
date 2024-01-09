@@ -44,8 +44,7 @@ spec:
       requests: { cpu: 23m, memory: 128Mi }
     garbageCollectionPolicy: Exponential
     garbageCollectionPeriod: 43200s
-    # TODO @renormalize : deltaSnapshotPeriod set to 10s for dev/testing purposes, reset to 300s
-    deltaSnapshotPeriod: 10s
+    deltaSnapshotPeriod: 300s
     deltaSnapshotMemoryLimit: 1Gi
     store:
       container: etcd-bucket
@@ -72,9 +71,7 @@ spec:
     #   labelSelector:
     #     matchLabels:
     #       app: etcd-statefulset
-
-  # TODO @renormalize : replicas set to 1 for dev/test purposes, reset to 3
-  replicas: 1
+  replicas: 3
   # priorityClassName: priority-class-name
   # storageClass: default
   # storageCapacity: 10Gi

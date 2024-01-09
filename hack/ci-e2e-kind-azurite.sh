@@ -32,10 +32,12 @@ echo -n "devstoreaccount1" > /tmp/azuriteCredentials/storageAccount
 echo -n "Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==" > /tmp/azuriteCredentials/storageKey
 
 make deploy-azurite
-make AZURITE_HOST="azurite-service:10000" \
-  STORAGE_ACCOUNT="devstoreaccount1" \
+make STORAGE_ACCOUNT="devstoreaccount1" \
   STORAGE_KEY="Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==" \
-  AZURE_STORAGE_CONNECTION_STRING="DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite-service:10000/devstoreaccount1;" \
+  AZURE_STORAGE_API_ENDPOINT="http://localhost:10000" \
+  AZURE_ENABLE_STORAGE_EMULATOR="true" \
+  AZURITE_HOST="azurite-service.default:10000" \
+  AZURE_STORAGE_CONNECTION_STRING="DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite-service.default:10000/devstoreaccount1;" \
   PROVIDERS="azure" \
   TEST_ID="$BUCKET_NAME" \
   STEPS="setup,deploy,test" \
