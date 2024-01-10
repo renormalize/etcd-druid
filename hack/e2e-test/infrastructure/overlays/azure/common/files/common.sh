@@ -19,8 +19,6 @@ function setup_azcli() {
     return
   fi
   echo "Installing azure-cli..."
-  echo "STORAGEACCOUNT: $STORAGE_ACCOUNT"
-  echo "CONNECTION_STRING: $AZURE_STORAGE_CONNECTION_STRING"
   apt update > /dev/null
   apt install -y curl > /dev/null
   curl -sL https://aka.ms/InstallAzureCLIDeb | bash
@@ -32,7 +30,6 @@ function create_azure_bucket() {
   if [[ -z "${AZURE_STORAGE_CONNECTION_STRING}" ]]; then
     az storage container create --account-name "${STORAGE_ACCOUNT}" --account-key "${STORAGE_KEY}" --name "${TEST_ID}"
   else
-    echo "Using connection string! ${AZURE_STORAGE_CONNECTION_STRING}"
     az storage container create --connection-string "${AZURE_STORAGE_CONNECTION_STRING}" --name "${TEST_ID}"
   fi
   echo "Successfully created ABS bucket ${TEST_ID} in storage account ${STORAGE_ACCOUNT} ."

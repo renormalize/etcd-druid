@@ -244,5 +244,5 @@ done
 
 deploy
 test_e2e
-# cleanup
-# undeploy
+cleanup
+undeploy
