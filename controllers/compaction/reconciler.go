@@ -131,7 +131,7 @@ func (r *Reconciler) reconcileJob(ctx context.Context, logger logr.Logger, etcd 
 		if job.Status.Succeeded > 0 {
 			metricJobsCurrent.With(prometheus.Labels{druidmetrics.EtcdNamespace: etcd.Namespace}).Set(0)
 			if job.Status.CompletionTime != nil {
-				metricJobDurationSeconds.With(prometheus.Labels{druidmetrics.LabelSucceeded: druidmetrics.ValueSucceededTrue, druidmetrics.EtcdNamespace: etcd.Namespace}).Observe(job.Status.CompletionTime.Time.Sub(job.Status.StartTime.Time).Seconds())
+				metricJobDurationSeconds.With(prometheus.Labels{druidmetrics.LabelSucceeded: druidmetrics.ValueSucceededFalse, druidmetrics.EtcdNamespace: etcd.Namespace}).Observe(job.Status.CompletionTime.Time.Sub(job.Status.StartTime.Time).Seconds())
 			}
 			if err := r.Delete(ctx, job, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil {
 				logger.Error(err, "Couldn't delete the successful job", "namespace", etcd.Namespace, "name", etcd.GetCompactionJobName())
@@ -139,7 +139,7 @@ func (r *Reconciler) reconcileJob(ctx context.Context, logger logr.Logger, etcd 
 					RequeueAfter: 10 * time.Second,
 				}, fmt.Errorf("error while deleting successful compaction job: %v", err)
 			}
-			metricJobsTotal.With(prometheus.Labels{druidmetrics.LabelSucceeded: druidmetrics.ValueSucceededTrue, druidmetrics.EtcdNamespace: etcd.Namespace}).Inc()
+			metricJobsTotal.With(prometheus.Labels{druidmetrics.LabelSucceeded: druidmetrics.ValueSucceededFalse, druidmetrics.EtcdNamespace: etcd.Namespace}).Inc()
 		}
 
 		// Delete job and requeue if the job failed
