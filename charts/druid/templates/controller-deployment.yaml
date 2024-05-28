@@ -89,6 +89,9 @@ spec:
         - --sentinel-exempt-service-accounts={{ join "," .Values.webhooks.sentinel.exemptServiceAccounts }}
         {{- end }}
         {{- end }}
+        {{- if eq ((.Values.webhooks).validate).enabled false }}
+        - --enable-validating-webhook=false
+        {{- end }}
 
         resources:
 {{ toYaml .Values.resources | indent 10 }}
