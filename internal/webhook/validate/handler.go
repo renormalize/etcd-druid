@@ -9,7 +9,7 @@ import (
 	"fmt"
 
 	"github.com/gardener/etcd-druid/api/v1alpha1"
-	druidvalidation "github.com/gardener/etcd-druid/api/validation"
+	etcdvalidation "github.com/gardener/etcd-druid/internal/webhook/validate/etcd"
 	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -46,7 +46,7 @@ func (h *Handler) Handle(ctx context.Context, req admission.Request) admission.R
 
 func (h *Handler) ValidateCreate(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
 	object := obj.(*v1alpha1.Etcd)
-	if errs := druidvalidation.ValidateEtcd(object); len(errs) > 0 {
+	if errs := etcdvalidation.ValidateEtcd(object); len(errs) > 0 {
 		return nil, apierrors.NewInvalid(object.GroupVersionKind().GroupKind(), object.GetName(), errs)
 	}
 	h.logger.Info("The validating webhook was called for create operation")
@@ -55,7 +55,7 @@ func (h *Handler) ValidateCreate(_ context.Context, obj runtime.Object) (admissi
 
 func (h *Handler) ValidateUpdate(_ context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
 	object := newObj.(*v1alpha1.Etcd)
-	if errs := druidvalidation.ValidateEtcdUpdate(object, oldObj.(*v1alpha1.Etcd)); len(errs) > 0 {
+	if errs := etcdvalidation.ValidateEtcdUpdate(object, oldObj.(*v1alpha1.Etcd)); len(errs) > 0 {
 		return nil, apierrors.NewInvalid(object.GroupVersionKind().GroupKind(), object.GetName(), errs)
 	}
 	h.logger.Info("The validating webhook was called for update operation")
