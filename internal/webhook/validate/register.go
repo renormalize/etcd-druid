@@ -5,7 +5,6 @@
 package validate
 
 import (
-	"github.com/gardener/etcd-druid/api/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
@@ -19,16 +18,10 @@ const (
 
 // RegisterWithManager registers Handler to the given manager.
 func (h *Handler) RegisterWithManager(mgr manager.Manager) error {
-	// webhook := &admission.Webhook{
-	// 	Handler:      h,
-	// 	RecoverPanic: true,
-	// }
-	webhook := admission.WithCustomValidator(
-		mgr.GetScheme(),
-		&v1alpha1.Etcd{},
-		h).
-		WithRecoverPanic(true)
-
+	webhook := &admission.Webhook{
+		Handler:      h,
+		RecoverPanic: true,
+	}
 	mgr.GetWebhookServer().Register(webhookPath, webhook)
 	return nil
 }

@@ -7,16 +7,22 @@ package validate
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"slices"
 
-	"github.com/gardener/etcd-druid/api/v1alpha1"
+	druidv1alpha1 "github.com/gardener/etcd-druid/api/v1alpha1"
 	etcdvalidation "github.com/gardener/etcd-druid/internal/webhook/validate/etcd"
 	"github.com/go-logr/logr"
+	admissionv1 "k8s.io/api/admission/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
+
+// Might not be necessary since CONNECT isn't defined in the ValidatingWebhookConfiguration
+var allowedOperations = []admissionv1.Operation{admissionv1.Connect}
 
 // Handler is the Validating Webhook admission handler.
 type Handler struct {
@@ -38,14 +44,60 @@ func NewHandler(mgr manager.Manager, config *Config) (*Handler, error) {
 }
 
 // Handle handles admission requests and validates creation of Etcd resources.
+// Handle should handle DELETE, CREATE, UPDATE in that order
 func (h *Handler) Handle(ctx context.Context, req admission.Request) admission.Response {
-	fmt.Println("The validating webhook was called")
-	h.logger.Info("The validating webhook was called")
-	return admission.Allowed(fmt.Sprintf("valid etcd-druid"))
+	requestGKString := fmt.Sprintf("%s/%s", req.Kind.Group, req.Kind.Kind)
+	log := h.logger.WithValues("name", req.Name, "namespace", req.Namespace, "resourceGroupKind", requestGKString, "operation", req.Operation, "user", req.UserInfo.Username)
+	log.V(1).Info("Validating webhook invoked")
+
+	// Might not be necessary since CONNECT isn't defined in the ValidatingWebhookConfiguration
+	if slices.Contains(allowedOperations, req.Operation) {
+		h.logger.Info("The validating webhook was called for CONNECT operation")
+		return admission.Allowed(fmt.Sprintf("operation %s is allowed", req.Operation))
+	}
+
+	etcd, err := h.getRelevantEtcdForRequest(req)
+	if err != nil {
+		h.logger.Info("The validating webhook errored")
+		return admission.Errored(http.StatusInternalServerError, fmt.Errorf("operation %s is denied due to error %v", req.Operation, err))
+	}
+
+	// etcd deletion request should be denied if it is already in deletion or is in reconciliation
+	if req.Operation == admissionv1.Delete && (etcd.IsReconciliationInProgress() || etcd.IsDeletionInProgress()) {
+		var message string
+		if etcd.IsDeletionInProgress() {
+			message = "etcd deletion being in progress"
+		} else {
+			message = "etcd reconciliation being in progress"
+		}
+		return admission.Denied(fmt.Sprintf("operation %s is denied due to %s", req.Operation, message))
+	}
+
+	fmt.Println("Name of the etcd is: ", etcd.Name)
+	return admission.Allowed(fmt.Sprintf("operation %s is allowed", req.Operation))
+}
+
+// getRelevantEtcdForRequest returns the Etcd resource that is relevant to the request.
+// CREATE would only require information about `Object` since only that will be present.
+// UPDATE would present information about `OldObject` and `Object`, but we can validate the Etcd by using `Object` only.
+// DELETE would only require information about the `OldObject`, since `Object` would be empty.
+func (h *Handler) getRelevantEtcdForRequest(req admission.Request) (*druidv1alpha1.Etcd, error) {
+	if req.Operation == admissionv1.Delete {
+		oldEtcd := &druidv1alpha1.Etcd{}
+		if err := h.decoder.DecodeRaw(req.OldObject, oldEtcd); err != nil {
+			return nil, err
+		}
+		return oldEtcd, nil
+	}
+	etcd := &druidv1alpha1.Etcd{}
+	if err := h.decoder.Decode(req, etcd); err != nil {
+		return nil, err
+	}
+	return etcd, nil
 }
 
 func (h *Handler) ValidateCreate(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
-	object := obj.(*v1alpha1.Etcd)
+	object := obj.(*druidv1alpha1.Etcd)
 	if errs := etcdvalidation.ValidateEtcd(object); len(errs) > 0 {
 		return nil, apierrors.NewInvalid(object.GroupVersionKind().GroupKind(), object.GetName(), errs)
 	}
@@ -54,8 +106,8 @@ func (h *Handler) ValidateCreate(_ context.Context, obj runtime.Object) (admissi
 }
 
 func (h *Handler) ValidateUpdate(_ context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	object := newObj.(*v1alpha1.Etcd)
-	if errs := etcdvalidation.ValidateEtcdUpdate(object, oldObj.(*v1alpha1.Etcd)); len(errs) > 0 {
+	object := newObj.(*druidv1alpha1.Etcd)
+	if errs := etcdvalidation.ValidateEtcdUpdate(object, oldObj.(*druidv1alpha1.Etcd)); len(errs) > 0 {
 		return nil, apierrors.NewInvalid(object.GroupVersionKind().GroupKind(), object.GetName(), errs)
 	}
 	h.logger.Info("The validating webhook was called for update operation")
