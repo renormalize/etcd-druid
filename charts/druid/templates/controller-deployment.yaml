@@ -89,6 +89,9 @@ spec:
         - --etcd-components-webhook-exempt-service-accounts={{ join "," .Values.webhooks.etcdcomponents.exemptServiceAccounts }}
         {{- end }}
         {{- end }}
+        {{- if ((.Values.webhooks).validate).enabled }}
+        - --enable-validating-webhook=true
+        {{- end }}
 
         resources:
 {{ toYaml .Values.resources | indent 10 }}
