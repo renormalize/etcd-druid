@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/scale/scheme/autoscalingv1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -43,6 +44,20 @@ func NewRequestDecoder(mgr manager.Manager) *RequestDecoder {
 		decoder: admission.NewDecoder(mgr.GetScheme()),
 		client:  mgr.GetClient(),
 	}
+}
+
+// DecodeRequestObjects decodes the runtime.RawExtension req.Object and req.OldObject into the passed oldObj and newObj's concrete type
+func (d *RequestDecoder) DecodeRequestObjects(_ context.Context, req admission.Request, oldObj runtime.Object, newObj runtime.Object) error {
+	if req.Operation == admissionv1.Delete {
+		if err := d.decoder.DecodeRaw(req.OldObject, oldObj); err != nil {
+			return err
+		}
+	}
+	// TODO: @renormalize add a check to ensure req.Object isn't empty
+	if err := d.decoder.Decode(req, newObj); err != nil {
+		return err
+	}
+	return nil
 }
 
 // DecodeRequestObjectAsPartialObjectMetadata decodes the request object as a PartialObjectMetadata.
