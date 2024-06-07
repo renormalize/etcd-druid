@@ -46,6 +46,7 @@ func NewHandler(mgr manager.Manager, config *Config) (*Handler, error) {
 // Handle handles admission requests and validates creation of Etcd resources.
 // Handle should handle DELETE, CREATE, UPDATE in that order
 func (h *Handler) Handle(ctx context.Context, req admission.Request) admission.Response {
+	h.logger.Info("The validating webhook was invoked")
 	requestGKString := fmt.Sprintf("%s/%s", req.Kind.Group, req.Kind.Kind)
 	log := h.logger.WithValues("name", req.Name, "namespace", req.Namespace, "resourceGroupKind", requestGKString, "operation", req.Operation, "user", req.UserInfo.Username)
 	log.V(1).Info("Validating webhook invoked")
@@ -59,20 +60,22 @@ func (h *Handler) Handle(ctx context.Context, req admission.Request) admission.R
 	etcd, err := h.getRelevantEtcdForRequest(req)
 	if err != nil {
 		h.logger.Info("The validating webhook errored")
-		return admission.Errored(http.StatusInternalServerError, fmt.Errorf("operation %s is denied due to error %v", req.Operation, err))
+		return admission.Errored(http.StatusInternalServerError, fmt.Errorf("operation %s is denied due to error: %w", req.Operation, err))
 	}
 
 	// etcd deletion request should be denied if it is already in deletion or is in reconciliation
 	if req.Operation == admissionv1.Delete && (etcd.IsReconciliationInProgress() || etcd.IsDeletionInProgress()) {
 		var message string
 		if etcd.IsDeletionInProgress() {
-			message = "etcd deletion being in progress"
+			message = "etcd deletion in progress"
 		} else {
-			message = "etcd reconciliation being in progress"
+			message = "etcd reconciliation in progress"
 		}
-		return admission.Denied(fmt.Sprintf("operation %s is denied due to %s", req.Operation, message))
+		h.logger.Info("The validating webhook denies")
+		return admission.Denied(fmt.Sprintf("operation %s is denied: %s", req.Operation, message))
 	}
 
+	h.logger.Info("The validating webhook approves")
 	fmt.Println("Name of the etcd is: ", etcd.Name)
 	return admission.Allowed(fmt.Sprintf("operation %s is allowed", req.Operation))
 }
@@ -111,10 +114,5 @@ func (h *Handler) ValidateUpdate(_ context.Context, oldObj, newObj runtime.Objec
 		return nil, apierrors.NewInvalid(object.GroupVersionKind().GroupKind(), object.GetName(), errs)
 	}
 	h.logger.Info("The validating webhook was called for update operation")
-	return nil, nil
-}
-
-func (h *Handler) ValidateDelete(_ context.Context, _ runtime.Object) (admission.Warnings, error) {
-	h.logger.Info("The validating webhook was called for delete operation")
 	return nil, nil
 }

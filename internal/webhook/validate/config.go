@@ -6,7 +6,7 @@ import (
 
 const (
 	enableValidatingWebhookFlagName = "enable-validating-webhook"
-	defaultEnableValidatingWebhook  = true
+	defaultEnableValidatingWebhook  = false
 )
 
 // Config defines the configuration for the Validating Webhook.
