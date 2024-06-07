@@ -2,13 +2,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package validation_test
+package etcd_test
 
 import (
 	"fmt"
 
 	"github.com/gardener/etcd-druid/api/v1alpha1"
-	"github.com/gardener/etcd-druid/api/validation"
+	"github.com/gardener/etcd-druid/internal/webhook/validate/etcd"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -43,7 +43,7 @@ var _ = Describe("Etcd validation tests", func() {
 
 	Describe("#ValidateEtcdCopyBackupsTask", func() {
 		It("should forbid empty EtcdCopyBackupsTask resources", func() {
-			errorList := validation.ValidateEtcdCopyBackupsTask(&v1alpha1.EtcdCopyBackupsTask{})
+			errorList := etcd.ValidateEtcdCopyBackupsTask(&v1alpha1.EtcdCopyBackupsTask{})
 
 			Expect(errorList).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
 				"Type":  Equal(field.ErrorTypeRequired),
@@ -58,7 +58,7 @@ var _ = Describe("Etcd validation tests", func() {
 			func(sourceStore, targetStore *v1alpha1.StoreSpec, m types.GomegaMatcher) {
 				task.Spec.SourceStore = *sourceStore
 				task.Spec.TargetStore = *targetStore
-				Expect(validation.ValidateEtcdCopyBackupsTask(task)).To(m)
+				Expect(etcd.ValidateEtcdCopyBackupsTask(task)).To(m)
 			},
 
 			Entry("should forbid invalid spec.sourceStore and spec.targetStore", &v1alpha1.StoreSpec{
@@ -101,7 +101,7 @@ var _ = Describe("Etcd validation tests", func() {
 			newTask.ResourceVersion = "2"
 			newTask.Spec.SourceStore.Container = pointer.String("foo")
 
-			errList := validation.ValidateEtcdCopyBackupsTaskUpdate(newTask, task)
+			errList := etcd.ValidateEtcdCopyBackupsTaskUpdate(newTask, task)
 
 			Expect(errList).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
 				"Type":  Equal(field.ErrorTypeInvalid),
@@ -117,7 +117,7 @@ var _ = Describe("Etcd validation tests", func() {
 			newTask.Spec.SourceStore.Prefix = namespace + "/" + name
 			newTask.Spec.TargetStore.Prefix = namespace + "/" + name
 
-			errList := validation.ValidateEtcdCopyBackupsTaskUpdate(newTask, task)
+			errList := etcd.ValidateEtcdCopyBackupsTaskUpdate(newTask, task)
 
 			Expect(errList).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
 				"Type":  Equal(field.ErrorTypeInvalid),
@@ -138,7 +138,7 @@ var _ = Describe("Etcd validation tests", func() {
 			newTask.Spec.TargetStore.Container = pointer.String("bar")
 			newTask.Spec.TargetStore.Provider = (*v1alpha1.StorageProvider)(pointer.String("gcp"))
 
-			errList := validation.ValidateEtcdCopyBackupsTaskUpdate(newTask, task)
+			errList := etcd.ValidateEtcdCopyBackupsTaskUpdate(newTask, task)
 
 			Expect(errList).To(BeEmpty())
 		})

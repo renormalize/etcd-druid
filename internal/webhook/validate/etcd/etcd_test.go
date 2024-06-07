@@ -2,13 +2,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package validation_test
+package etcd_test
 
 import (
 	"fmt"
 
 	"github.com/gardener/etcd-druid/api/v1alpha1"
-	"github.com/gardener/etcd-druid/api/validation"
+	etcdvalidation "github.com/gardener/etcd-druid/internal/webhook/validate/etcd"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -48,7 +48,7 @@ var _ = Describe("Etcd validation tests", func() {
 
 	Describe("#ValidateEtcd", func() {
 		It("should forbid empty Etcd resources", func() {
-			errorList := validation.ValidateEtcd(&v1alpha1.Etcd{})
+			errorList := etcdvalidation.ValidateEtcd(&v1alpha1.Etcd{})
 
 			Expect(errorList).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
 				"Type":  Equal(field.ErrorTypeRequired),
@@ -62,7 +62,7 @@ var _ = Describe("Etcd validation tests", func() {
 		DescribeTable("validate spec.backup.store",
 			func(store *v1alpha1.StoreSpec, m types.GomegaMatcher) {
 				etcd.Spec.Backup.Store = store
-				Expect(validation.ValidateEtcd(etcd)).To(m)
+				Expect(etcdvalidation.ValidateEtcd(etcd)).To(m)
 			},
 
 			Entry("should forbid invalid spec.backup.store", &v1alpha1.StoreSpec{
@@ -95,7 +95,7 @@ var _ = Describe("Etcd validation tests", func() {
 			newEtcd.ResourceVersion = "2"
 			newEtcd.Spec.Backup.Port = pointer.Int32(42)
 
-			errList := validation.ValidateEtcdUpdate(newEtcd, etcd)
+			errList := etcdvalidation.ValidateEtcdUpdate(newEtcd, etcd)
 
 			Expect(errList).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
 				"Type":  Equal(field.ErrorTypeInvalid),
@@ -110,7 +110,7 @@ var _ = Describe("Etcd validation tests", func() {
 			newEtcd.ResourceVersion = "2"
 			newEtcd.Spec.Backup.Store.Prefix = namespace + "/" + name
 
-			errList := validation.ValidateEtcdUpdate(newEtcd, etcd)
+			errList := etcdvalidation.ValidateEtcdUpdate(newEtcd, etcd)
 
 			Expect(errList).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
 				"Type":  Equal(field.ErrorTypeInvalid),
@@ -127,7 +127,7 @@ var _ = Describe("Etcd validation tests", func() {
 			newEtcd.Spec.Backup.Store.Container = pointer.String("foo")
 			newEtcd.Spec.Backup.Store.Provider = (*v1alpha1.StorageProvider)(pointer.String("gcp"))
 
-			errList := validation.ValidateEtcdUpdate(newEtcd, etcd)
+			errList := etcdvalidation.ValidateEtcdUpdate(newEtcd, etcd)
 
 			Expect(errList).To(BeEmpty())
 		})
