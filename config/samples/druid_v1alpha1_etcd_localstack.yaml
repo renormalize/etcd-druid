@@ -48,7 +48,7 @@ spec:
     deltaSnapshotMemoryLimit: 1Gi
     store:
       container: etcd-bucket
-      prefix: etcd-test
+      prefix: default/etcd-test
       provider: S3
       secretRef:
         name: etcd-backup-aws

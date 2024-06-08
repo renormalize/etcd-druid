@@ -143,6 +143,7 @@ install: manifests
 	kubectl apply -f config/crd/bases
 
 # Run against the configured Kubernetes cluster in ~/.kube/config or specified by environment variable KUBECONFIG
+# This make target will not work when developing webhooks, use deploy instead
 .PHONY: run
 run:
 	go run ./main.go
