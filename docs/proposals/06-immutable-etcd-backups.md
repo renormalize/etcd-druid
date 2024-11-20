@@ -15,20 +15,19 @@ reviewers:
 
 ## Summary
 
-This proposal aims to enhance the reliability and integrity of ETCD backups created by `etcd-backup-restore` in ETCD clusters managed by `etcd-druid` by introducing immutable backups. By leveraging cloud provider features that support a write-once-read-many (WORM) model, unauthorized modifications to backup data are prevented, ensuring that backups remain intact and accessible for restoration.
+This proposal aims to enhance the reliability and integrity of ETCD backups created by `etcd-backup-restore` in ETCD clusters managed by `etcd-druid`, by introducing immutable backups. By leveraging cloud provider features that support a write-once-read-many (WORM) model, unauthorized modifications to backup data are prevented, ensuring that backups remain intact and accessible for restoration.
 
-The proposed solution relies on `etcd-druid` to manage ETCD backups and handle hibernation processes effectively. It leverages one of the suggested approaches to ensure backups remain immutable over extended periods. It is important to note that using `etcd-backup-restore` standalone may not be sufficient to achieve this functionality, as the immutability and hibernation handling are specifically managed within `etcd-druid`.
+The proposed solution relies on `etcd-druid` to manage ETCD backups and handle hibernation processes effectively. It leverages one of the suggested approaches to ensure backups remain immutable over extended periods. It is important to note that using `etcd-backup-restore` standalone may not be sufficient to achieve this functionality end-to-end, as the immutability handling (with respect to hibernation) is specifically managed within `etcd-druid`.
 
 ## Motivation
 
-Ensuring the integrity and availability of ETCD backups is crucial for the ability to restore an ETCD cluster when it has become non-functional or inoperable. Making the backups immutable, protects against any unintended or malicious modifications post-creation, thereby enhancing the overall security posture.
+Ensuring the integrity and availability of ETCD backups is crucial for the ability to restore an ETCD cluster when it has become non-functional or inoperable. Making the backups immutable protects against any unintended or malicious modifications post-creation, thereby enhancing the overall security posture.
 
 ### Goals
 
 - Implement immutable backup support for ETCD clusters.
 - Secure backup data against unintended or unauthorized modifications after creation.
-- Implement changes required in `etcd-backup-restore` to support this proposal.
-
+- Implement changes required in `etcd-backup-restore` and `etcd-druid` to support this proposal.
 
 ### Non-Goals
 
@@ -39,7 +38,7 @@ Ensuring the integrity and availability of ETCD backups is crucial for the abili
 
 ### Overview
 
-We propose introducing immutability in backup storage by leveraging cloud provider features that support a write-once-read-many (WORM) model. This approach will prevent data alterations post-creation, enhancing data integrity and security. 
+We propose introducing immutability in backup storage by leveraging cloud provider features that support a write-once-read-many (WORM) model. This approach will prevent data alterations post-creation, enhancing data integrity and security.
 
 There are two types of immutability options to consider:
 
@@ -74,9 +73,11 @@ Operators must ensure that the ETCD backup configuration aligns with the immutab
 
 #### Handling of Hibernated Clusters
 
-When an ETCD cluster is hibernated (scaled down to zero replicas) for a duration exceeding the immutability period, backups may become mutable again (this behavior depends on the cloud provider; refer to [Comparison of Storage Provider Properties](#comparison-of-storage-provider-properties-for-bucket-level-and-object-level-immutability)), compromising the intended immutability guarantees.
+When an ETCD cluster is hibernated for a duration exceeding the immutability period, backups may become mutable again (this behavior depends on the cloud provider; refer to [Comparison of Storage Provider Properties](#comparison-of-storage-provider-properties-for-bucket-level-and-object-level-immutability)), compromising the intended immutability guarantees.
 
-To maintain snapshot immutability during extended hibernation, we propose two approaches.
+Such handling of hibernated clusters is the type of scenario which the etcd operator-tasks frameworks lends itself to quite well, and thus for all proposed solutions, the operator tasks framework as defined [here](./05-etcd-operator-tasks.md) will be made use of for the designs of the solutions.
+
+To maintain snapshot immutability during extended hibernation, we propose two approaches:
 
 ##### Approach 1: Using the Compaction Job
 
@@ -106,61 +107,79 @@ Utilize the compaction job to periodically take fresh snapshots during hibernati
 
 - **Resource Consumption:** Starting an embedded ETCD instance periodically consumes resources.
 
-##### Approach 2: Using EtcdCopyBackupsTask
+##### Approach 2: Re-upload of the latest snapshot
 
 **Proposed Solution:**
 
-Utilize the `EtcdCopyBackupsTask` to copy the latest full snapshot to a new snapshot with a different timestamp, thereby extending its immutability period without altering the cluster's state.
+A new `EtcdOperatorTask` called `EtcdSnapshotImmutabilityExtension` will be created as defined in the operator tasks framework. This new `EtcdOperatorTask` extends the immutability period by deploying a job which uploads another copy of the latest snapshot to the object store.
 
-For this approach, a full snapshot must be taken before hibernating the ETCD cluster (i.e., scaling `StatefulSet.spec.replicas` to zero).
-
-Upon hibernation, if `etcd.spec.backup.store.immutableSettings.retentionType` is set to `"Bucket"`, the controller automatically creates an `EtcdCopyBackupsTask` named `<etcd-name>-extend-immutability` to extend the immutability of the snapshot.
+A full snapshot is taken before hibernating the ETCD cluster. This is to ensure that no state maintained in the etcd cluster is lost before hibernation.
 
 **Implementation Details:**
 
+- **Introduce the `extend-immutability` command to etcdbrctl**:
+  - etcd-backup-restore will be enhanced to support a new command `extend-immutability` which does the following:
+    - Downloads the latest full snapshot from the object store.
+    - Replaces the Unix epoch in the file-name of the downloaded snapshot to contain the time at which the file completes downloading.
+    - Uploads this newly renamed snapshot to the same object store.
+    - Renews the full snapshot lease after the upload is successful.
+
+    The immutability period of an object begins from the moment of upload, thus extending the immutability period of the latest snapshot. Renaming the snapshot is necessary since the downloaded snapshot can not simply be re-uploaded as uploading with the same name would be an attempt at modifying an already existing snapshot, which is disallowed.
+
+    This command could either be implemented standalone, or could be implemented as a wrapper over the `copy` command of `etcdbrctl` by extending the functionality of the `copy` command accordingly.
+- **Introduce the `garbage-collect` command to etcdbrctl**:
+  - etcd-backup-restore will be enhanced to support a new command `garbage-collect` which does the following:
+    - Perform garbage collection of the snapshots in the object store according to the policy specified with the `--garbage-collection-policy` flag.  
+
+    This functionality is needed since it would be necessary to garbage collect the (identical final) snapshots that are (re)uploaded in order to ensure that there is always a snapshot which is immutable.
 - **Update `Etcd` CRD:**
+  - Add `etcd.spec.hibernation`:  
+    Since there are situations outside of hibernation where the number of replicas of the statefulset would have to be scaled to zero, there needs to be an explicit way in which it is conveyed to etcd-druid that the etcd cluster is being hibernated. This can be achieved by extending the `Etcd` CRD by including a new field in the `spec` called `hibernated`.
+
+    ```yaml
+    hibernation:
+      enabled: <bool>
+    ```
+
+  - Add `etcd.status.hibernatedAt`:  
+    This field conveys information about whether the cluster has been successfully hibernated after a reconciliation, and the time at which it entered hibernation. This field is cleared when the cluster is woken up from hibernation.
+
+    ```yaml
+    hibernatedAt: <hibernation-time>
+    ```
+
   - Add `immutableSettings.retentionType` under `etcd.spec.backup.store`.
-
 - **ETCD Controller Logic:**
-  - When hibernation is requested:
+  - When hibernation is requested, by changing `etcd.spec.hibernated.enabled` to `true`:
     - The controller removes the ETCD client ports `2380` and `2379` from the `etcd-client` service, leaving only the etcd-backup-restore port `8080`. This stops ETCD client traffic.
-    - Trigger a full snapshot using the HTTP/HTTPS API `[etcd-backup-restore:port]/snapshot/full/latest`.
-    - After verifying the snapshot, the controller scales down the ETCD cluster (i.e., sets `StatefulSet.spec.replicas` to zero).
-    - The controller automatically creates an `EtcdCopyBackupsTask` named `<etcd-name>-extend-immutability` based on `etcd.spec.backup.fullSnapshotSchedule` if `etcd.spec.backup.store.immutableSettings.retentionType` is set to `"Bucket"`.`<etcd-name>-extend-immutability`.
-      - **EtcdCopyBackupsTask Specifications:**
-        - Specifies the source and target stores (which can be the same).
-        - with options:
-          - `renewLatestFullSnapshot: true` to copy the latest full snapshot as a new snapshot with a different timestamp.
-          - `enableGarbageCollection: true` to perform garbage collection.
-          - `enableLeaseRenewal: true` to update the full snapshot lease.
-          - `maxBackup: 1` to copy only the latest full snapshot.
-- **Update `EtcdCopyBackupsTask` CRD:**
-  - Add new optional fields to EtcdCopyBackupsTask.Spec
-    - `renewLatestFullSnapshot: true|false` to copy the latest full snapshot as a new snapshot with a different timestamp.
-    - `enableGarbageCollection: true|false` to perform garbage collection.
-    - `enableLeaseRenewal: true|false` to update the full snapshot lease.
+    - The controller creates a `EtcdOperatorTask` to trigger an on-demand full snapshot.
+      - On-demand full snapshot is successful: the controller does no additional handling.
+      - On-demand full snapshot fails: the controller triggers the creation of a `EtcdOperatorTask` for an on-demand compaction job that compacts the latest base full snapshot and the corresponding deltas.
+    - The controller scales in the ETCD cluster (i.e., sets `StatefulSet.spec.replicas` to zero).
+    - The controller creates the `EtcdSnapshotImmutabilityExtension` periodically if `etcd.spec.backup.store.immutableSettings.retentionType` is set to `"Bucket"`.
 
-- **EtcdCopyBackupsTask Controller Logic:**
-  - Add metrics to the `EtcdCopyBackupsTask` controller to aid in debugging.
-- **Snapshot Copier Logic:**
-  - If `renewLatestFullSnapshot` is `true`, modifies the `CreatedOn` timestamp and regenerates the snapshot name after fetching the snapshot from the source store and before saving it to the destination store, effectively creating a new snapshot with a current timestamp.
-  - If `enableGarbageCollection` is `true`, runs garbage collection to delete old snapshots according to specified retention policies.
-  - If `enableLeaseRenewal` is `true`, updates the full snapshot lease.
+- **`EtcdSnapshotImmutabilityExtension` specification:**
+  - Run `etcdbrctl extend-immutability --bucket-level-immutability` to extend the immutability of the latest snapshot.
+  - Run `etcdbrctl garbage-collect --garbage-collection-policy <garbage-collection-policy>` to garbage collect the snapshots that are created during the extension.
+
+- **EtcdOperatorTask Controller Logic:**
+  - The operator-tasks controller will react to the creation of the custom resource, and will deploy a job named `<etcd-name>-extend-immutability` which is the `EtcdSnapshotImmutabilityExtension` job.
+  - The controller also reports metrics regarding the `EtcdSnapshotImmutabilityExtension` job, which can be used to raise alerts for operators that immutability has not been extended.
 
 ###### Advantages
 
 - **Minimal Operational Impact:** Does not alter the ETCD cluster's state during hibernation and respects the operator's intention to hibernate the cluster without unintended changes.
 - **Efficient Resource Utilization:** Only the latest snapshot is copied, limiting additional storage usage, and avoids the need to start an embedded ETCD instance.
-- **Automated Process:** The process of taking a full snapshot before hibernation and creating the `EtcdCopyBackupsTask` is automated within the controller.
+- **Automated Process:** The process of taking a full snapshot before hibernation and creating the `EtcdSnapshotImmutabilityExtension` is automated within the controller.
 
 ###### Disadvantages
 
-- **Additional Complexity:** Requires updates to the Etcd Druid controller and snapshot copier logic.
+- **Additional Complexity:** Requires updates to the etcd controller, introduction of the operator-tasks controller, and introduction of new etcdbrctl commands.
 - **Prerequisite Requirement:** Relies on successfully taking a full snapshot before hibernation, which may introduce delays or require handling snapshot failures.
 
 ##### Recommendation
 
-After evaluating both approaches, **Approach 2: Using EtcdCopyBackupsTask** is recommended due to its minimal operational impact and efficient resource utilization. By ensuring that a full snapshot is taken before hibernation, we maintain data consistency and extend the immutability period effectively. This approach respects the operator's intention to keep the ETCD cluster hibernated without introducing significant resource consumption or complexity.
+After evaluating both approaches, **Approach 2: Re-upload of the latest snapshot** is recommended due to its minimal operational impact and efficient resource utilization. By ensuring that a full snapshot is taken before hibernation, we maintain data consistency and extend the immutability period effectively. This approach respects the operator's intention to keep the ETCD cluster hibernated without introducing significant resource consumption or complexity.
 
 ## Compatibility
 
@@ -168,7 +187,7 @@ The proposed changes are fully compatible with existing ETCD clusters and backup
 
 - **Backward Compatibility:**
   - Existing clusters without immutable buckets will continue to function without change.
-  - The introduction of the `EtcdCopyBackupsTask` does not affect clusters that are not hibernated.
+  - The introduction of the `EtcdSnapshotImmutabilityExtension` does not affect clusters that are not hibernated.
 - **Forward Compatibility:**
   - Clusters can opt-in to use immutable backups by configuring the bucket accordingly.
   - The controller's logic to handle hibernation is additive and does not interfere with existing workflows.
@@ -287,7 +306,7 @@ Given the complexities and limitations, we recommend using bucket-level immutabi
 - **Etcd Druid:** A Kubernetes operator that manages ETCD clusters for Gardener.
 - **EtcdCopyBackupsTask:** A custom resource that defines a task to copy ETCD backups.
 - **Compaction Job:** A process that compacts ETCD snapshots to reduce storage size and improve performance.
-- **Hibernation:** Scaling down a cluster (or ETCD) to zero replicas to save resources.
+- **Hibernation:** Shutting down all the processes that correspond to an etcd cluster, while persisting information which can later be used to restart the etcd cluster with the same state.
 - **Immutability Period:** The duration for which data must remain immutable in storage before it can be modified or deleted.
 - **WORM (Write Once, Read Many):** A storage model where data, once written, cannot be modified or deleted until certain conditions are met.
 - **Immutability:** The property of an object being unchangeable after creation.
