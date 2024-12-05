@@ -47,6 +47,7 @@ func main() {
 	logger.Info("Starting manager")
 	if err := mgr.Start(ctx); err != nil {
 		logger.Error(err, "Error running manager")
+		fmt.Println("hi")
 		os.Exit(1)
 	}
 }
