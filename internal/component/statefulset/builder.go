@@ -215,6 +215,12 @@ func (b *stsBuilder) getPodTemplateAnnotations(ctx component.OperatorContext) ma
 }
 
 func (b *stsBuilder) getVolumeClaimTemplates() []corev1.PersistentVolumeClaim {
+	// @renormalize if Volumes are specified, they are used for the etcd pods
+	// instead of dynamic provisioning through storage classes
+	if b.etcd.Spec.Volumes != nil {
+		return nil
+	}
+
 	storageClassName := ptr.Deref(b.etcd.Spec.StorageClass, "")
 	pvcClaim := []corev1.PersistentVolumeClaim{
 		{
@@ -702,6 +708,27 @@ func (b *stsBuilder) getPodVolumes(ctx component.OperatorContext) ([]corev1.Volu
 			volumes = append(volumes, *backupVolume)
 		}
 	}
+
+	// TODO: @renormalize behavior for limit and size is not consistent between ephemeral and emptyDir here
+	// should Requests and Limits be specified in the Volume section for the Pod Template, or should it be fetched
+	// from the b.etcd.Spec.StorageCapacity
+	if b.etcd.Spec.Volumes != nil {
+		for _, volume := range b.etcd.Spec.Volumes {
+			volumeTemp := volume.DeepCopy()
+			if volumeTemp.EmptyDir != nil {
+				sizeLimit := ptr.Deref(volume.EmptyDir.SizeLimit, defaultStorageCapacity)
+				volumeTemp.EmptyDir.SizeLimit = &sizeLimit
+			} else if volumeTemp.Ephemeral != nil {
+				// Access mode should not be anything other than corev1.ReadWriteOnce
+				volumeTemp.Ephemeral.VolumeClaimTemplate.Spec.AccessModes = []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}
+				if _, ok := volumeTemp.Ephemeral.VolumeClaimTemplate.Spec.Resources.Requests[corev1.ResourceStorage]; !ok {
+					volumeTemp.Ephemeral.VolumeClaimTemplate.Spec.Resources.Requests[corev1.ResourceStorage] = ptr.Deref(b.etcd.Spec.StorageCapacity, defaultStorageCapacity)
+				}
+			}
+			volumes = append(volumes, *volumeTemp)
+		}
+	}
+
 	return volumes, nil
 }
 
