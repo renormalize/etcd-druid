@@ -328,6 +328,10 @@ type EtcdSpec struct {
 	// +optional
 	// +kubebuilder:validation:XValidation:message="etcd.spec.VolumeClaimTemplate is an immutable field",rule="self == oldSelf"
 	VolumeClaimTemplate *string `json:"volumeClaimTemplate,omitempty"`
+	// Volumes defines the volumes that are attached the etcd pods
+	// Specifying volumes will override the VolumeClaimTemplate
+	// +optional
+	Volumes []corev1.Volume `json:"volumes,omitempty"`
 }
 
 // CrossVersionObjectReference contains enough information to let you identify the referred resource.
