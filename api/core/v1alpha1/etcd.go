@@ -334,6 +334,10 @@ type EtcdSpec struct {
 	// run as root. By default, they run as non-root with user 'nobody'.
 	// +optional
 	RunAsRoot *bool `json:"runAsRoot,omitempty"`
+	// Volumes defines the volumes that are attached the etcd pods
+	// Specifying volumes will override the VolumeClaimTemplate
+	// +optional
+	Volumes []corev1.Volume `json:"volumes,omitempty"`
 }
 
 // CrossVersionObjectReference contains enough information to let you identify the referred resource.

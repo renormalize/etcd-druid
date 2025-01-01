@@ -574,6 +574,13 @@ func (in *EtcdSpec) DeepCopyInto(out *EtcdSpec) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.Volumes != nil {
+		in, out := &in.Volumes, &out.Volumes
+		*out = make([]v1.Volume, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
 	return
 }
 
