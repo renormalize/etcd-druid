@@ -302,6 +302,10 @@ type EtcdSpec struct {
 	// VolumeClaimTemplate defines the volume claim template to be created
 	// +optional
 	VolumeClaimTemplate *string `json:"volumeClaimTemplate,omitempty"`
+	// Volumes defines the volumes that are attached the etcd pods
+	// Specifying volumes will override the VolumeClaimTemplate
+	// +optional
+	Volumes []corev1.Volume `json:"volumes,omitempty"`
 }
 
 // CrossVersionObjectReference contains enough information to let you identify the referred resource.

@@ -51,7 +51,7 @@ function generate_crds() {
   local output_dir="$(pwd)"
 
   # generate crds
-  controller-gen crd paths="github.com/gardener/etcd-druid/api/v1alpha1" output:crd:dir="${output_dir}" output:stdout
+  controller-gen crd:generateEmbeddedObjectMeta=true paths="github.com/gardener/etcd-druid/api/v1alpha1" output:crd:dir="${output_dir}" output:stdout
 
   # rename files adding prefix if any specified
   if [ -n "${CRD_FILENAME_PREFIX}" ]; then
