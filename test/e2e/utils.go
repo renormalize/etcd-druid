@@ -48,6 +48,8 @@ const (
 
 	envGCSServiceAccount = "GCP_SERVICEACCOUNT_JSON_PATH"
 
+	envEmulatorURL = "EMULATOR_URL"
+
 	etcdBackupSecretPrefix = "etcd-backup"
 	etcdPrefix             = "etcd"
 
@@ -59,8 +61,10 @@ const (
 
 // Storage contains information about the storage provider.
 type Storage struct {
-	Provider   druidv1alpha1.StorageProvider
-	SecretData map[string][]byte
+	Provider         druidv1alpha1.StorageProvider
+	SecretData       map[string][]byte
+	EndpointOverride string
+	EmulatorURL      string
 }
 
 // TestProvider contains test related information.
@@ -194,6 +198,7 @@ func getDefaultEtcd(name, namespace, container, prefix string, provider TestProv
 			Name:      fmt.Sprintf("%s-%s", etcdBackupSecretPrefix, provider.Suffix),
 			Namespace: namespace,
 		}
+		backupStore.EndpointOverride = &provider.Storage.EndpointOverride
 
 		backupTLS := defaultTls(provider.Suffix)
 
@@ -332,12 +337,13 @@ func getProviders() ([]TestProvider, error) {
 							"secretAccessKey": []byte(s3SecretAccessKey),
 							"region":          []byte(s3Region),
 						},
+						EmulatorURL: getEnvOrFallback(envEmulatorURL, ""),
 					},
 				}
 				localStackHost := getEnvOrFallback("LOCALSTACK_HOST", "")
 				if localStackHost != "" {
-					provider.Storage.SecretData["endpoint"] = []byte("http://" + localStackHost)
 					provider.Storage.SecretData["s3ForcePathStyle"] = []byte("true")
+					provider.Storage.EndpointOverride = fmt.Sprintf("http://%s", localStackHost)
 				}
 			}
 		case providerAzure:
@@ -353,12 +359,12 @@ func getProviders() ([]TestProvider, error) {
 							"storageAccount": []byte(absStorageAccount),
 							"storageKey":     []byte(absStorageKey),
 						},
+						EmulatorURL: getEnvOrFallback(envEmulatorURL, ""),
 					},
 				}
 				azuriteDomain := getEnvOrFallback("AZURITE_DOMAIN", "")
 				if azuriteDomain != "" {
-					provider.Storage.SecretData["emulatorEnabled"] = []byte("true")
-					provider.Storage.SecretData["domain"] = []byte(azuriteDomain)
+					provider.Storage.EndpointOverride = fmt.Sprintf("http://%s/%s", azuriteDomain, absStorageAccount)
 				}
 			}
 		case providerGCP:
@@ -379,11 +385,6 @@ func getProviders() ([]TestProvider, error) {
 						},
 					},
 				}
-				fakegcsHost := getEnvOrFallback("FAKEGCS_HOST", "")
-				if fakegcsHost != "" {
-					provider.Storage.SecretData["storageAPIEndpoint"] = []byte("http://" + fakegcsHost + "/storage/v1/")
-					provider.Storage.SecretData["emulatorEnabled"] = []byte("true")
-				}
 			}
 		case providerLocal:
 			provider = TestProvider{
@@ -399,21 +400,6 @@ func getProviders() ([]TestProvider, error) {
 	}
 
 	return providers, nil
-}
-
-func isEmulatorEnabled(provider TestProvider) bool {
-	switch provider.Name {
-	case "aws":
-		return provider.Storage.SecretData["endpoint"] != nil
-	case "az", "gcp":
-		if val, ok := provider.Storage.SecretData["emulatorEnabled"]; ok {
-			return string(val) == "true"
-		}
-		return false
-	case "local":
-		return false
-	}
-	return false
 }
 
 func getKubeconfig(kubeconfigPath string) (*rest.Config, error) {
@@ -603,12 +589,12 @@ func executeRemoteCommand(ctx context.Context, kubeconfigPath, namespace, podNam
 	return strings.TrimSpace(buf.String()), strings.TrimSpace(errBuf.String()), nil
 }
 
-func getSnapstore(storageProvider, storageContainer, storePrefix string, isEmulatorEnabled bool) (brtypes.SnapStore, error) {
+func getSnapstore(storageProvider, storageContainer, storePrefix, endpoint string) (brtypes.SnapStore, error) {
 	snapstoreConfig := &brtypes.SnapstoreConfig{
-		Provider:          storageProvider,
-		Container:         storageContainer,
-		Prefix:            path.Join(storePrefix, "v2"),
-		IsEmulatorEnabled: isEmulatorEnabled,
+		Provider:         storageProvider,
+		Container:        storageContainer,
+		Prefix:           path.Join(storePrefix, "v2"),
+		EndpointOverride: endpoint,
 	}
 	store, err := snapstore.GetSnapstore(snapstoreConfig)
 	if err != nil {

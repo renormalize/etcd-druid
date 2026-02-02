@@ -25,6 +25,7 @@ make GCP_SERVICEACCOUNT_JSON_PATH="/tmp/svc_acc.json" \
   GOOGLE_APPLICATION_CREDENTIALS="/tmp/svc_acc.json" \
   GCP_PROJECT_ID="e2e-test" \
   FAKEGCS_HOST="fake-gcs.default:8000" \
+  EMULATOR_URL="http://localhost:8000" \
   PROVIDERS="gcp" \
   TEST_ID="$BUCKET_NAME" \
   STEPS="setup,deploy,test" \
